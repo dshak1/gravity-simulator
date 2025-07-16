@@ -47,12 +47,12 @@ glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
 float lastX = 400.0, lastY = 300.0;
 float yaw = -90;
 float pitch =0.0;
-float deltaTime = 0.0;
+float deltaTime = 0.0; //time passing between frames
 float lastFrame = 0.0;
 
-const double G = 6.6743e-11; // m^3 kg^-1 s^-2
+const double G = 6.6743e-11; // m^3 kg^-1 s^-2 this is the universal gravtational constant which is exerted on all things and is the same thing pulling you down to earth right now
 const float c = 299792458.0;
-float initMass = float(pow(10, 22));
+float initMass = float(pow(10, 22)); //mass of objects
 float sizeRatio = 30000.0f;
 
 GLFWwindow* StartGLU();
@@ -71,8 +71,8 @@ void DrawGrid(GLuint shaderProgram, GLuint gridVAO, size_t vertexCount);
 class Object {
     public:
         GLuint VAO, VBO;
-        glm::vec3 position = glm::vec3(400, 300, 0);
-        glm::vec3 velocity = glm::vec3(0, 0, 0);
+        glm::vec3 position = glm::vec3(400, 300, 0); // where the object exists
+        glm::vec3 velocity = glm::vec3(0, 0, 0); // how the object moves
         size_t vertexCount;
         glm::vec4 color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 
@@ -80,9 +80,9 @@ class Object {
         bool Launched = false;
         bool target = false;
 
-        float mass;
+        float mass; // weight of the object in space
         float density;  // kg / m^3  HYDROGEN
-        float radius;
+        float radius; 
 
         glm::vec3 LastPos = position;
         bool glow;
@@ -135,11 +135,11 @@ class Object {
             return vertices;
         }
         
-        void UpdatePos(){
-            this->position[0] += this->velocity[0] / 94;
-            this->position[1] += this->velocity[1] / 94;
-            this->position[2] += this->velocity[2] / 94;
-            this->radius = pow(((3 * this->mass/this->density)/(4 * 3.14159265359)), (1.0f/3.0f)) / sizeRatio;
+        void UpdatePos(){ // move thorugh space
+            this->position[0] += this->velocity[0] / 94; // the 94 is a speed scaler 
+            this->position[1] += this->velocity[1] / 94; // in real physics it would be position+=velocity * deltaTime
+            this->position[2] += this->velocity[2] / 94; // but we want to actually see the movement ourselves so we scale it ** movement depends on fps
+            this->radius = pow(((3 * this->mass/this->density)/(4 * 3.14159265359)), (1.0f/3.0f)) / sizeRatio; // for future reference ddon't do this as it is considered bad programming
         }
         void UpdateVertices() {
             // generate new vertices with current radius
@@ -152,7 +152,7 @@ class Object {
         glm::vec3 GetPos() const {
             return this->position;
         }
-        void accelerate(float x, float y, float z){
+        void accelerate(float x, float y, float z){ //respond to forces
             this->velocity[0] += x / 96;
             this->velocity[1] += y / 96;
             this->velocity[2] += z / 96;
@@ -268,7 +268,7 @@ int main() {
                         }
 
                         //collision
-                        obj.velocity *= obj.CheckCollision(obj2);
+                        obj.velocity *= obj.CheckCollision(obj2); //interactions with other objects
                         std::cout<<"radius: "<<obj.radius<<std::endl;
                     }
                 }
