@@ -27,6 +27,7 @@ void main() {
 
 bool running = true;
 bool pause = false;
+float simulationSpeed = 1.0f; // Default simulation speed multiplier
 glm::vec3 cameraPos   = glm::vec3(0.0f, 0.0f,  1.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
@@ -52,6 +53,8 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 glm::vec3 sphericalToCartesian(float r, float theta, float phi);
 void DrawGrid(GLuint shaderProgram, GLuint gridVAO, size_t vertexCount);
 
+// Function prototype for renderText (declare it before using it)
+void renderText(const std::string& text, float x, float y, float scale, GLuint shaderProgram, GLint colorLoc);
 
 class Object {
     public:
@@ -70,6 +73,17 @@ class Object {
         float radius;
 
         glm::vec3 LastPos = position;
+        
+        // Trail as spheres
+        struct TrailSphere {
+            glm::vec3 position;
+            GLuint VAO, VBO;
+            size_t vertexCount;
+        };
+        
+        std::vector<TrailSphere> trailSpheres;
+        int maxTrailLength = 30; // Fewer, larger spheres
+        bool hasTrail = false; // Flag to determine if this object should have a trail
 
         Object(glm::vec3 initPosition, glm::vec3 initVelocity, float mass, float density = 3344) {   
             this->position = initPosition;
@@ -78,6 +92,8 @@ class Object {
             this->density = density;
             this->radius = pow(((3 * this->mass/this->density)/(4 * 3.14159265359)), (1.0f/3.0f)) / 100000;
             
+            // Initialize trail vectors (but don't create any spheres yet)
+            trailSpheres.clear();
 
             // Generate vertices (centered at origin)
             std::vector<float> vertices = Draw();
@@ -118,10 +134,15 @@ class Object {
         }
         
         void UpdatePos(){
-            this->position[0] += this->velocity[0] / 94;
-            this->position[1] += this->velocity[1] / 94;
-            this->position[2] += this->velocity[2] / 94;
+            this->position[0] += this->velocity[0] / 94 * simulationSpeed;
+            this->position[1] += this->velocity[1] / 94 * simulationSpeed;
+            this->position[2] += this->velocity[2] / 94 * simulationSpeed;
             this->radius = pow(((3 * this->mass/this->density)/(4 * 3.14159265359)), (1.0f/3.0f)) / 100000;
+            
+            // Update trail after position change
+            if (hasTrail) {
+                UpdateTrail();
+            }
         }
         void UpdateVertices() {
             // Generate new vertices with current radius
@@ -135,9 +156,9 @@ class Object {
             return this->position;
         }
         void accelerate(float x, float y, float z){
-            this->velocity[0] += x / 96;
-            this->velocity[1] += y / 96;
-            this->velocity[2] += z / 96;
+            this->velocity[0] += x / 96 * simulationSpeed;
+            this->velocity[1] += y / 96 * simulationSpeed;
+            this->velocity[2] += z / 96 * simulationSpeed;
         }
         float CheckCollision(const Object& other) {
             float dx = other.position[0] - this->position[0];
@@ -148,6 +169,93 @@ class Object {
                 return -0.2f;
             }
             return 1.0f;
+        }
+
+        // Method to update the trail positions
+        void UpdateTrail() {
+            if (!hasTrail) return; // Skip if trail is not enabled
+            
+            // Only add a new sphere every few frames
+            static int frameCount = 0;
+            frameCount++;
+            if (frameCount % 5 == 0) { // Add a new sphere every 5 frames
+                // Create a new trail sphere
+                TrailSphere newSphere;
+                newSphere.position = position;
+                
+                // Create a smaller sphere
+                float trailSphereRadius = radius * 0.3f; // 30% the size of the main object
+                std::vector<float> vertices;
+                int stacks = 8;
+                int sectors = 8;
+                
+                // Generate the sphere vertices
+                for(float i = 0.0f; i <= stacks; ++i){
+                    float theta1 = (i / stacks) * glm::pi<float>();
+                    float theta2 = (i+1) / stacks * glm::pi<float>();
+                    for (float j = 0.0f; j < sectors; ++j){
+                        float phi1 = j / sectors * 2 * glm::pi<float>();
+                        float phi2 = (j+1) / sectors * 2 * glm::pi<float>();
+                        glm::vec3 v1 = sphericalToCartesian(trailSphereRadius, theta1, phi1);
+                        glm::vec3 v2 = sphericalToCartesian(trailSphereRadius, theta1, phi2);
+                        glm::vec3 v3 = sphericalToCartesian(trailSphereRadius, theta2, phi1);
+                        glm::vec3 v4 = sphericalToCartesian(trailSphereRadius, theta2, phi2);
+
+                        // Triangle 1
+                        vertices.insert(vertices.end(), {v1.x, v1.y, v1.z});
+                        vertices.insert(vertices.end(), {v2.x, v2.y, v2.z});
+                        vertices.insert(vertices.end(), {v3.x, v3.y, v3.z});
+                        
+                        // Triangle 2
+                        vertices.insert(vertices.end(), {v2.x, v2.y, v2.z});
+                        vertices.insert(vertices.end(), {v4.x, v4.y, v4.z});
+                        vertices.insert(vertices.end(), {v3.x, v3.y, v3.z});
+                    }   
+                }
+                
+                newSphere.vertexCount = vertices.size();
+                CreateVBOVAO(newSphere.VAO, newSphere.VBO, vertices.data(), vertices.size());
+                
+                // Add to trail
+                trailSpheres.push_back(newSphere);
+                
+                // Keep trail at maximum length
+                if (trailSpheres.size() > maxTrailLength) {
+                    // Clean up the oldest sphere
+                    glDeleteVertexArrays(1, &trailSpheres[0].VAO);
+                    glDeleteBuffers(1, &trailSpheres[0].VBO);
+                    trailSpheres.erase(trailSpheres.begin());
+                }
+                
+                // Remove trail size debug print
+            }
+        }
+        
+        // Method to draw the trail
+        void DrawTrail(GLuint shaderProgram, GLint colorLoc) {
+            if (!hasTrail || trailSpheres.empty()) return;
+            
+            // Use a bright, high-contrast color for the trail
+            glUniform4f(colorLoc, 1.0f, 0.0f, 0.0f, 1.0f); // Bright red
+            
+            // Draw each sphere in the trail
+            for (size_t i = 0; i < trailSpheres.size(); ++i) {
+                // Fade the color based on age (older spheres are more transparent)
+                float alpha = (float)(i + 1) / trailSpheres.size(); // 0.0 to 1.0
+                glUniform4f(colorLoc, 1.0f, 0.0f, 0.0f, alpha);
+                
+                // Position the sphere
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::translate(model, trailSpheres[i].position);
+                GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
+                glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+                
+                // Draw the sphere
+                glBindVertexArray(trailSpheres[i].VAO);
+                glDrawArrays(GL_TRIANGLES, 0, trailSpheres[i].vertexCount / 3);
+            }
+            
+            glBindVertexArray(0);
         }
 };
 std::vector<Object> objs = {};
@@ -182,6 +290,29 @@ int main() {
         Object(glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), 5.97219*pow(10, 24), 5515),
 
     };
+    
+    // Set moon to grey color
+    objs[0].color = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
+    // Enable trail for the moon
+    objs[0].hasTrail = true;
+    // Set earth to blue color
+    objs[1].color = glm::vec4(0.0f, 0.3f, 0.8f, 1.0f);
+    
+    // Print simulation speed control instructions
+    std::cout << "===== SIMULATION SPEED CONTROLS =====" << std::endl;
+    std::cout << "Press 0: Normal speed (1.0x)" << std::endl;
+    std::cout << "Press 1: Slow motion (0.5x)" << std::endl;
+    std::cout << "Press 2: Fast (2.0x)" << std::endl;
+    std::cout << "Press 3: Faster (5.0x)" << std::endl;
+    std::cout << "Press 4: Super fast (10.0x)" << std::endl;
+    std::cout << "===================================" << std::endl;
+    std::cout << "===== CAMERA CONTROLS =====" << std::endl;
+    std::cout << "Hold X: 5x camera movement speed" << std::endl;
+    std::cout << "WASD: Move camera" << std::endl;
+    std::cout << "Mouse: Look around" << std::endl;
+    std::cout << "Space/Shift: Up/Down" << std::endl;
+    std::cout << "===================================" << std::endl;
+    
     std::vector<float> gridVertices = CreateGridVertices(100000.0f, 50, objs);
     CreateVBOVAO(gridVAO, gridVBO, gridVertices.data(), gridVertices.size());
     std::cout<<"Earth radius: "<<objs[1].radius<<std::endl;
@@ -263,10 +394,21 @@ int main() {
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, obj.position); // Apply position here
             glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            
+            // Draw the object
             glBindVertexArray(obj.VAO);
             glDrawArrays(GL_TRIANGLES, 0, obj.vertexCount / 3);
+            
+            // Draw the trail if this object has one
+            if (obj.hasTrail) {
+                // Reset model matrix for trail (don't want to translate the trail vertices)
+                glm::mat4 identityModel = glm::mat4(1.0f);
+                glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(identityModel));
+                obj.DrawTrail(shaderProgram, objectColorLoc);
+            }
         }
         
+        // Just swap buffers and poll events without rendering text
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -274,6 +416,13 @@ int main() {
     for (auto& obj : objs) {
         glDeleteVertexArrays(1, &obj.VAO);
         glDeleteBuffers(1, &obj.VBO);
+        // Clean up trail buffers
+        if (obj.hasTrail) {
+            for (auto& sphere : obj.trailSpheres) {
+                glDeleteVertexArrays(1, &sphere.VAO);
+                glDeleteBuffers(1, &sphere.VBO);
+            }
+        }
     }
 
     glDeleteVertexArrays(1, &gridVAO);
@@ -386,10 +535,38 @@ void UpdateCam(GLuint shaderProgram, glm::vec3 cameraPos) {
 }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    float cameraSpeed = 1000.0f * deltaTime;
+    // Calculate camera speed - increase by 5x if X is pressed
+    float speedMultiplier = (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) ? 5.0f : 1.0f;
+    float cameraSpeed = 1000.0f * deltaTime * speedMultiplier;
+    
     bool shiftPressed = (mods & GLFW_MOD_SHIFT) != 0;
     Object& lastObj = objs[objs.size() - 1];
     
+    // Simulation speed control with number keys (when pressed, not held)
+    if (action == GLFW_PRESS) {
+        switch (key) {
+            case GLFW_KEY_0: // Reset to normal speed
+                simulationSpeed = 1.0f;
+                std::cout << "Simulation speed: 1.0x (normal)" << std::endl;
+                break;
+            case GLFW_KEY_1: // 0.5x speed
+                simulationSpeed = 0.5f;
+                std::cout << "Simulation speed: 0.5x (slow)" << std::endl;
+                break;
+            case GLFW_KEY_2: // 2x speed
+                simulationSpeed = 2.0f;
+                std::cout << "Simulation speed: 2.0x" << std::endl;
+                break;
+            case GLFW_KEY_3: // 5x speed
+                simulationSpeed = 5.0f;
+                std::cout << "Simulation speed: 5.0x" << std::endl;
+                break;
+            case GLFW_KEY_4: // 10x speed
+                simulationSpeed = 10.0f;
+                std::cout << "Simulation speed: 10.0x (fast)" << std::endl;
+                break;
+        }
+    }
 
     if (glfwGetKey(window, GLFW_KEY_W)==GLFW_PRESS){
         cameraPos += cameraSpeed * cameraFront;
@@ -617,6 +794,69 @@ std::vector<float> CreateGridVertices(float size, int divisions, const std::vect
     
 
     return vertices;
+}
+
+// Function to render text for displaying simulation speed
+void renderText(const std::string& text, float x, float y, float scale, GLuint shaderProgram, GLint colorLoc) {
+    // Save current shader settings
+    GLint currentModelLoc = glGetUniformLocation(shaderProgram, "model");
+    
+    // Set color for text (white)
+    glUniform4f(colorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
+    
+    // Setup orthographic projection for 2D rendering
+    glm::mat4 projection = glm::ortho(0.0f, 800.0f, 0.0f, 600.0f, -1.0f, 1.0f);
+    GLint projectionLoc = glGetUniformLocation(shaderProgram, "projection");
+    glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+    
+    // Setup view matrix (identity for 2D)
+    glm::mat4 view = glm::mat4(1.0f);
+    GLint viewLoc = glGetUniformLocation(shaderProgram, "view");
+    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+    
+    // Create simple text vertices (just a small square for each character)
+    float characterSize = 10.0f * scale;
+    float spacing = characterSize * 0.5f;
+    
+    // Render each character as a small square
+    for (size_t i = 0; i < text.length(); i++) {
+        float xpos = x + i * spacing;
+        
+        // Create a simple quad for each character
+        float vertices[] = {
+            xpos, y, 0.0f,
+            xpos + characterSize, y, 0.0f,
+            xpos, y + characterSize, 0.0f,
+            xpos + characterSize, y, 0.0f,
+            xpos + characterSize, y + characterSize, 0.0f,
+            xpos, y + characterSize, 0.0f
+        };
+        
+        // Create temporary VAO/VBO for this character
+        GLuint textVAO, textVBO;
+        glGenVertexArrays(1, &textVAO);
+        glGenBuffers(1, &textVBO);
+        
+        glBindVertexArray(textVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        
+        // Draw the character
+        glm::mat4 model = glm::mat4(1.0f);
+        glUniformMatrix4fv(currentModelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        
+        // Clean up
+        glDeleteVertexArrays(1, &textVAO);
+        glDeleteBuffers(1, &textVBO);
+    }
+    
+    // Restore 3D projection
+    projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 750000.0f);
+    glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
 }
 
 

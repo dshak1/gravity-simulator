@@ -1,5 +1,5 @@
 #include <GL/glew.h>
-#include <GLFW/glfw3.h>
+#include <GLFW/glfw3.h> // graphics libarary framework
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -51,11 +51,11 @@ float deltaTime = 0.0; //time passing between frames
 float lastFrame = 0.0;
 
 const double G = 6.6743e-11; // m^3 kg^-1 s^-2 this is the universal gravtational constant which is exerted on all things and is the same thing pulling you down to earth right now
-const float c = 299792458.0;
+const float c = 299792458.0; // speed of light in m/s
 float initMass = float(pow(10, 22)); //mass of objects
 float sizeRatio = 30000.0f;
 
-GLFWwindow* StartGLU();
+GLFWwindow* StartGLU(); // init the lib, create a window, set up openGL context and ret ptr to window object
 GLuint CreateShaderProgram(const char* vertexSource, const char* fragmentSource);
 void CreateVBOVAO(GLuint& VAO, GLuint& VBO, const float* vertices, size_t vertexCount);
 void UpdateCam(GLuint shaderProgram, glm::vec3 cameraPos);
@@ -70,7 +70,15 @@ void DrawGrid(GLuint shaderProgram, GLuint gridVAO, size_t vertexCount);
 
 class Object {
     public:
-        GLuint VAO, VBO;
+        // VAO = vertex array object is a container that stores
+            //how vertex data is organized
+            // which vertex attribures are eabled
+            // how to to interpret the vertex buffer
+        // vertex buffer object
+            //gpu memory that stores the actual vertex data 
+            // contains the raw numbers, x y z coords  for vertices
+            // holds all the vertex positions, colors, normals, etc...
+        GLuint VAO, VBO; // GL unisigned int 
         glm::vec3 position = glm::vec3(400, 300, 0); // where the object exists
         glm::vec3 velocity = glm::vec3(0, 0, 0); // how the object moves
         size_t vertexCount;
@@ -103,7 +111,7 @@ class Object {
 
             CreateVBOVAO(VAO, VBO, vertices.data(), vertexCount);
         }
-
+    
         std::vector<float> Draw() {
             std::vector<float> vertices;
             int stacks = 10;
@@ -138,7 +146,7 @@ class Object {
         void UpdatePos(){ // move thorugh space
             this->position[0] += this->velocity[0] / 94; // the 94 is a speed scaler 
             this->position[1] += this->velocity[1] / 94; // in real physics it would be position+=velocity * deltaTime
-            this->position[2] += this->velocity[2] / 94; // but we want to actually see the movement ourselves so we scale it ** movement depends on fps
+            this->position[2] += this->velocity[2] / 94; // but we want to actually see the movement ourselves so we scale it ** movement depends on
             this->radius = pow(((3 * this->mass/this->density)/(4 * 3.14159265359)), (1.0f/3.0f)) / sizeRatio; // for future reference ddon't do this as it is considered bad programming
         }
         void UpdateVertices() {
@@ -250,13 +258,13 @@ int main() {
 
             for(auto& obj2 : objs){
                 if(&obj2 != &obj && !obj.Initalizing && !obj2.Initalizing){
-                    float dx = obj2.GetPos()[0] - obj.GetPos()[0];
-                    float dy = obj2.GetPos()[1] - obj.GetPos()[1];
-                    float dz = obj2.GetPos()[2] - obj.GetPos()[2];
-                    float distance = sqrt(dx * dx + dy * dy + dz * dz);
+                    float dx = obj2.GetPos()[0] - obj.GetPos()[0]; //change in x position
+                    float dy = obj2.GetPos()[1] - obj.GetPos()[1]; // change in y position
+                    float dz = obj2.GetPos()[2] - obj.GetPos()[2]; // change in z
+                    float distance = sqrt(dx * dx + dy * dy + dz * dz); // 3d distance formula
 
                     if (distance > 0) {
-                        std::vector<float> direction = {dx / distance, dy / distance, dz / distance};
+                        std::vector<float> direction = {dx / distance, dy / distance, dz / distance}; //normalization
                         distance *= 1000;
                         double Gforce = (G * obj.mass * obj2.mass) / (distance * distance);
                         
