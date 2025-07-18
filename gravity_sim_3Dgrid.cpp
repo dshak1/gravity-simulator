@@ -327,6 +327,41 @@ int main() {
 
         glfwSetKeyCallback(window, keyCallback);
         glfwSetMouseButtonCallback(window, mouseButtonCallback);
+        
+        // Handle continuous camera movement in main loop
+        float speedMultiplier = (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) ? 5.0f : 1.0f;
+        float cameraSpeed = 1000.0f * deltaTime * speedMultiplier;
+        
+        if (glfwGetKey(window, GLFW_KEY_W)==GLFW_PRESS){
+            cameraPos += cameraSpeed * cameraFront;
+        }
+        if (glfwGetKey(window, GLFW_KEY_S)==GLFW_PRESS){
+            cameraPos -= cameraSpeed * cameraFront;
+        }
+        if (glfwGetKey(window, GLFW_KEY_A)==GLFW_PRESS){
+            cameraPos -= cameraSpeed * glm::normalize(glm::cross(cameraFront, cameraUp));
+        }
+        if (glfwGetKey(window, GLFW_KEY_D)==GLFW_PRESS){
+            cameraPos += cameraSpeed * glm::normalize(glm::cross(cameraFront, cameraUp));
+        }
+        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
+            cameraPos += cameraSpeed * cameraUp;
+        }
+        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
+            cameraPos -= cameraSpeed * cameraUp;
+        }
+        if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS){
+            pause = true;
+        }
+        if (glfwGetKey(window, GLFW_KEY_K) == GLFW_RELEASE){
+            pause = false;
+        }
+        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS){
+            glfwTerminate();
+            glfwWindowShouldClose(window);
+            running = false;
+        }
+        
         UpdateCam(shaderProgram, cameraPos);
         if (!objs.empty() && objs.back().Initalizing) {
             if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
@@ -535,12 +570,7 @@ void UpdateCam(GLuint shaderProgram, glm::vec3 cameraPos) {
 }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    // Calculate camera speed - increase by 5x if X is pressed
-    float speedMultiplier = (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) ? 5.0f : 1.0f;
-    float cameraSpeed = 1000.0f * deltaTime * speedMultiplier;
-    
     bool shiftPressed = (mods & GLFW_MOD_SHIFT) != 0;
-    Object& lastObj = objs[objs.size() - 1];
     
     // Simulation speed control with number keys (when pressed, not held)
     if (action == GLFW_PRESS) {
@@ -566,40 +596,6 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
                 std::cout << "Simulation speed: 10.0x (fast)" << std::endl;
                 break;
         }
-    }
-
-    if (glfwGetKey(window, GLFW_KEY_W)==GLFW_PRESS){
-        cameraPos += cameraSpeed * cameraFront;
-    }
-    if (glfwGetKey(window, GLFW_KEY_S)==GLFW_PRESS){
-        cameraPos -= cameraSpeed * cameraFront;
-    }
-
-    if (glfwGetKey(window, GLFW_KEY_A)==GLFW_PRESS){
-        cameraPos -= cameraSpeed * glm::normalize(glm::cross(cameraFront, cameraUp));
-    }
-    if (glfwGetKey(window, GLFW_KEY_D)==GLFW_PRESS){
-        cameraPos += cameraSpeed * glm::normalize(glm::cross(cameraFront, cameraUp));
-    }
-
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
-        cameraPos += cameraSpeed * cameraUp;
-    }
-    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
-        cameraPos -= cameraSpeed * cameraUp;
-    }
-
-    if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS){
-        pause = true;
-    }
-    if (glfwGetKey(window, GLFW_KEY_K) == GLFW_RELEASE){
-        pause = false;
-    }
-    
-    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS){
-        glfwTerminate();
-        glfwWindowShouldClose(window);
-        running = false;
     }
 
     // init arrows pos up down left right
